@@ -1,0 +1,102 @@
+version: "3.9"
+
+x-base:
+  &base
+    build:
+        context: .
+        dockerfile: Dockerfile
+
+x-django-common:
+  environment:
+    &common-env
+    # POSTGRES
+    POSTGRES_ENGINE: ${POSTGRES_ENGINE:-django.db.backends.postgresql}
+    POSTGRES_NAME: ${POSTGRES_NAME:-postgres}
+    POSTGRES_USER: ${POSTGRES_USER:-postgres}
+    POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+    POSTGRES_HOST: ${POSTGRES_HOST:-db}
+    POSTGRES_PORT: ${POSTGRES_PORT:-5432}
+
+services:
+  db:
+    image: postgres:13.7-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-postgres}
+    ports:
+      - 5432:5432
+    volumes:
+      - postgres_vol:/var/lib/postgresql/data
+    networks:
+      safari_network:
+        aliases:
+          - db.local
+
+  mailhog:
+    image: mailhog/mailhog:v1.0.0
+    ports:
+      - 8025:8025
+    networks:
+      safari_network:
+        aliases:
+          - mailhog.local
+
+
+  web:
+    # build
+    << : *base
+    volumes:
+      - .:/app
+    ports:
+      - "8000:8000"
+    environment:
+      <<: *common-env
+      MODE: ${MODE:-development}
+          # DJANGO
+      DJANGO_DEBUG: ${DJANGO_DEBUG:-True}
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:-django-insecure-q-36brun@5w1@f51z3%b#u-8vb4(hc!58&%xei3y9t9j)94e(p}
+      DJANGO_SUPERUSER_USERNAME: ${DJANGO_SUPERUSER_USERNAME:-admin}
+      DJANGO_SUPERUSER_PASSWORD: ${DJANGO_SUPERUSER_PASSWORD:-testing1234}
+      DJANGO_SUPERUSER_EMAIL: ${DJANGO_SUPERUSER_EMAIL:-admin@gmail.com}
+    depends_on:
+      db:
+        condition: service_started
+      mailhog:
+        condition: service_started
+    restart: always
+    networks:
+      safari_network:
+        aliases:
+          - safari.local
+
+  test:
+    << : *base
+    command: pytest
+    environment:
+      <<: *common-env
+      MODE: ${MODE:-development}
+         # DJANGO
+      DJANGO_DEBUG: ${DJANGO_DEBUG:-True}
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:-django-insecure-q-36brun@5w1@f51z3%b#u-8vb4(hc!58&%xei3y9t9j)94e(p}
+      DJANGO_SUPERUSER_USERNAME: ${DJANGO_SUPERUSER_USERNAME:-test}
+      DJANGO_SUPERUSER_PASSWORD: ${DJANGO_SUPERUSER_PASSWORD:-testing1234}
+      DJANGO_SUPERUSER_EMAIL: ${DJANGO_SUPERUSER_EMAIL:-test@gmail.com}
+    depends_on:
+      db:
+        condition: service_started
+      mailhog:
+        condition: service_started
+    networks:
+      safari_network:
+        aliases:
+          - test.local
+
+
+volumes:
+  django_admin_static:
+  postgres_vol:
+
+networks:
+  safari_network:
+    driver: bridge
